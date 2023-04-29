@@ -5,7 +5,9 @@ const sounds = require('./commands/sounds');
 require('dotenv').config();
 
 const token = process.env.TOKEN;
-const clientId = process.env.CLIENT_ID;
+const mp3Dir = process.env.MP3_DIRECTORY;
+
+//Create the client object
 const client = new Client({
     intents: [
         IntentsBitField.Flags.Guilds,
@@ -33,12 +35,25 @@ for (let file of commandFiles) {
 
 //Configure commands handlers
 client.on(Events.InteractionCreate, async (interaction) => {
+    //Make sure the sub-directory for this guild exists
+    let dirPath = path.join(mp3Dir, interaction.guild.id);
+    if(!fs.existsSync(dirPath)){
+        try {
+            fs.mkdirSync(dirPath, {recursive: true});
+        } catch(err) {
+            console.error("Error creating directory:", err);
+            await interaction.editReply({content: "Failed to create new directory for your server's soundboard.", ephemeral: true});
+            return;
+        }
+    }
+
     if (interaction.isChatInputCommand()) {
         //Determine what command is being requested
         const command = interaction.client.commands.get(interaction.commandName);
         if (!command) {
             console.error("Received invalid command:", interaction.commandName);
-            interaction.reply({ content: "Sorry, I don't understand this command!", ephemeral: true });
+            await interaction.reply({ content: "Sorry, I don't understand this command!", ephemeral: true });
+            return;
         }
         try {
             //Execute the command
@@ -46,9 +61,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         } catch (err) {
             console.error("Error processing command:", err);
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: 'Oops, sorry! There was an error processing this command :(', ephemeral: true });
+                await interaction.followUp({ content: 'Sorry, there was an error processing this command :(', ephemeral: true });
             } else {
-                await interaction.reply({ content: 'Oops, sorry! There was an error processing this command :(', ephemeral: true });
+                await interaction.reply({ content: 'Sorry, there was an error processing this command :(', ephemeral: true });
             }
         }
     } else if(interaction.isButton()){

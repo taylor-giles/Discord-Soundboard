@@ -56,7 +56,6 @@ module.exports = {
                 await interaction.editReply({content: "Failed to create new directory for your server's soundboard.", ephemeral: true});
                 return;
             }
-            
         }
 
         //Download the file and save it locally
