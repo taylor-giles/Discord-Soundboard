@@ -17,6 +17,8 @@ MAX_FILE_SIZE = 300000
 * The `MP3 Directory` is where the bot will store all uploaded MP3s. The bot will create a sub-folder (in the configured directory) for each server that the bot is added to. Each server's MP3s will go in its respective subfolder. 
 * Sounds are uploaded as MP3s. MP3 file uploads are limited to a size defined by `MAX_FILE_SIZE`. 300000 bytes = 300KB, or roughly 10 seconds of audio at a standard bit rate, so it is a good default option, but this value can be changed according to your needs.
 
+IMPORTANT NOTE: The first time the bot is set up, **and any time the definition/configuration of commands is changed** (this means anything in the `data` field of the exported command object), the `deploy-commands.js` script needs to be run. This can be done using `node deploy-commands.js`. Note that this command re-defines the commands supported by this bot for **all servers** that the bot is in, and that Discord enforces a limit on the number of commands that can be updated in a server per day (200/server/day).
+
 # Usage
 ## Adding the bot to a server
 To add the bot to a server, first generate an invite link via the "OAuth2 > URL Generator" tab in the [Discord Developer Portal](https://discord.com/developers/applications) for your application. Ensure that the "bot" scope is checked, as well as the following Bot Permissions:
