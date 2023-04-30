@@ -1,5 +1,5 @@
 # Welcome to the Soundboard
-This Discord bot allows you to upload custom sounds on a per-server basis and play them in voice channels on command, controlled through a button-based soundboard triggered by slash-command in text channels.
+This Discord bot allows users to upload custom sounds on a per-server basis and play them in voice channels on command, controlled through a button-based soundboard triggered by slash-command in text channels.
 
 # Setup
 1) Create an application using the [Discord Developer Portal](https://discord.com/developers/applications)
@@ -39,7 +39,7 @@ To add the bot to a server, first generate an invite link via the "OAuth2 > URL 
 Then copy the link at the bottom, paste it into the browser, select your server from the dropdown, and click "Continue" > "Authorize". This link can be re-used for as many servers as desired, and distributed to others for them to add the bot to their servers.
 
 ## Running the bot
-To bring the soundboard bot online, simply run the index.js file with Node. This can be achieved by running `node index.js` (in the project directory), with nodemon (run `nodemon` in the project directory), or any other desired method or running Node applications.
+To bring the soundboard bot online, simply run the index.js file with Node. This can be achieved by running `node index.js` (in the project directory), with nodemon (run `nodemon` in the project directory), or any other desired method for running Node applications.
 
 ## Using the bot
 The soundboard bot recognizes several main commands:
