@@ -19,7 +19,7 @@ module.exports = {
             option.setName("name")
                 .setDescription("The name of the sound")
                 .setRequired(true)
-                .setMaxLength(20)
+                .setMaxLength(50)
         ),
     async execute(interaction) {
         const file = interaction.options.getAttachment("mp3_file");

@@ -49,8 +49,12 @@ module.exports = {
 
         //Set up voice channel disconnect handler (clear the soundboard messages)
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
-            //TODO: Delete ALL replies to this interaction
-            await interaction.deleteReply();
+            //TODO: Invalidate ALL replies to this interaction
+            try {
+                await interaction?.editReply({content: "This request has expired.", components: [], ephemeral: true});
+            } catch(err){
+                console.error(err);
+            }
         });
 
         //Determine bounds
