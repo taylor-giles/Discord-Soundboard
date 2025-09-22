@@ -10,7 +10,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('sounds')
         .setDescription('Shows the soundboard')
-        .addStringOption(option => 
+        .addStringOption(option =>
             option.setName("folder")
                 .setDescription("Folder to show sounds from (shows all sounds if not specified)")
                 .setRequired(false)
@@ -23,36 +23,50 @@ module.exports = {
         // Validate folder if provided
         if (folder) {
             if (!/^[a-zA-Z0-9]+$/.test(folder)) {
-                await interaction.reply({content: "Folder name must contain only letters and numbers.", ephemeral: true});
+                await interaction.reply({ content: "Folder name must contain only letters and numbers.", ephemeral: true });
                 return;
             }
-            soundsDirectory = path.join(soundsDirectory, folder);
-            if (!fs.existsSync(soundsDirectory)) {
-                await interaction.reply({content: `Folder \`${folder}\` does not exist.`, ephemeral: true});
+            if (!fs.existsSync(path.join(soundsDirectory, folder))) {
+                await interaction.reply({ content: `Folder \`${folder}\` does not exist.`, ephemeral: true });
                 return;
             }
         }
 
         // Get all MP3 files (including those in subfolders if no specific folder is selected)
-        let files = [];
+        let filesByFolder = new Map(); // Map<string, string[]> where key is folder path (or '' for root) and value is array of filenames
+        
         if (!folder) {
-            // Read files from root and all subfolders
-            const getAllFiles = (dir) => {
-                const dirFiles = fs.readdirSync(dir);
-                dirFiles.forEach(file => {
-                    const fullPath = path.join(dir, file);
-                    if (fs.statSync(fullPath).isDirectory()) {
-                        getAllFiles(fullPath).forEach(f => files.push(path.join(file, f)));
-                    } else if (file.endsWith('.mp3')) {
-                        files.push(file);
-                    }
-                });
-            };
-            getAllFiles(soundsDirectory);
+            // First get files in root
+            try {
+                const rootFiles = fs.readdirSync(soundsDirectory)
+                    .filter(file => file.endsWith('.mp3'));
+                if (rootFiles.length > 0) {
+                    filesByFolder.set('', rootFiles);
+                }
+
+                // Then get files in each subfolder
+                fs.readdirSync(soundsDirectory, { withFileTypes: true })
+                    .filter(dirent => dirent.isDirectory())
+                    .forEach(dir => {
+                        const folderPath = dir.name;
+                        const folderFiles = fs.readdirSync(path.join(soundsDirectory, folderPath))
+                            .filter(file => file.endsWith('.mp3'));
+                        if (folderFiles.length > 0) {
+                            filesByFolder.set(folderPath, folderFiles);
+                        }
+                    });
+            } catch (error) {
+                console.error("Error reading files:", error);
+                await interaction.reply({ content: "Unable to read sound files", ephemeral: true });
+                return;
+            }
         } else {
             // Read files only from the specified folder
             try {
-                files = fs.readdirSync(soundsDirectory).filter(file => file.endsWith(".mp3"));
+                const files = fs.readdirSync(path.join(soundsDirectory, folder)).filter(file => file.endsWith(".mp3"));
+                if (files.length > 0) {
+                    filesByFolder.set(folder, files);
+                }
             } catch (error) {
                 console.error("Error reading files:", error);
                 await interaction.reply({ content: "Unable to find sound files", ephemeral: true });
@@ -64,30 +78,31 @@ module.exports = {
         let userVoiceChannel = interaction.member.voice.channel;
         if (!userVoiceChannel) {
             //If not in voice channel, send back list of sounds
-            //TODO: Make this work for more than 1024 characters
-            let listOfSounds = (files.length <= 0) ? "Your soundboard is empty! Get it started with /addsound." : "";
-            for(let file of files){
-                const soundName = path.parse(file).name;
-                const index = files.indexOf(file) + 1;
-                if (!folder) {
-                    // If no folder specified, include folder path in the display
-                    const relativePath = path.relative(soundsDirectory, path.dirname(path.join(soundsDirectory, file)));
-                    if (relativePath !== '') {
-                        listOfSounds += `\n${index}) ${relativePath}/${soundName}`;
-                        continue;
-                    }
+            if (filesByFolder.size === 0) {
+                await interaction.reply({ content: "Your soundboard is empty! Get it started with /addsound.", ephemeral: true });
+                return;
+            }
+
+            let listOfSounds = "";
+            let index = 1;
+
+            // Then add files from each folder
+            for (let [folderName, files] of filesByFolder) {
+                if(folderName) listOfSounds += `\n\n${folderName}:`;
+                for (let file of files) {
+                    listOfSounds += `\n${index++}) ${path.parse(file).name}`;
                 }
-                listOfSounds += `\n${index}) ${soundName}`;
             }
 
             //Create embed
             let embed = new EmbedBuilder()
                 .setTitle("Soundboard")
                 .setDescription("Here is a list of available sounds for this server. To use them, join a voice channel and use /sounds again.")
-                .addFields({name: "Sounds", value: listOfSounds});
-            interaction.reply({ content: "", embeds: [embed], ephemeral: true });
+                .addFields({ name: "Sounds", value: listOfSounds });
+            await interaction.reply({ content: "", embeds: [embed], ephemeral: true });
             return;
         }
+
         let connection = joinVoiceChannel({
             channelId: userVoiceChannel.id,
             guildId: userVoiceChannel.guild.id,
@@ -98,58 +113,64 @@ module.exports = {
         connection.on(VoiceConnectionStatus.Disconnected, async () => {
             //TODO: Invalidate ALL replies to this interaction
             try {
-                await interaction?.editReply({content: "This request has expired.", components: [], ephemeral: true});
-            } catch(err){
+                await interaction?.editReply({ content: "This request has expired.", components: [], ephemeral: true });
+            } catch (err) {
                 console.error(err);
             }
         });
 
         //Determine bounds
-        let buttonsPerRow = 5;
-        let rowsPerGrid = 5;
+        const buttonsPerRow = 5;
+        const rowsPerGrid = 5;
+        const maxButtonsPerGrid = buttonsPerRow * rowsPerGrid;
 
-        //Build buttons
-        let buttons = []
-        for (let file of files) {
-            let filepath = path.join(soundsDirectory, file);
-            let label = path.parse(file).name;
-            if (!folder) {
-                // If no folder specified, show folder name in label for files in folders
-                const relativePath = path.relative(soundsDirectory, path.dirname(filepath));
-                if (relativePath !== '') {
-                    label = `${relativePath}/${label}`;
-                }
-            }
-            buttons.push(new ButtonBuilder()
-                .setCustomId(`sounds-${filepath}`)
-                .setLabel(label)
-                .setStyle(1)
-            );
-        }
-
-        //Build rows
-        let rows = [];
-        let buttonIndex = 0;
-        while (buttonIndex < buttons.length) {
-            rows.push(new ActionRowBuilder().addComponents(buttons.slice(buttonIndex, buttonIndex + buttonsPerRow)));
-            buttonIndex += buttonsPerRow;
-        }
-
-        //Build grids
-        let grids = [];
-        let rowIndex = 0;
-        while (rowIndex < rows.length) {
-            grids.push(rows.slice(rowIndex, rowIndex + rowsPerGrid));
-            rowIndex += rowsPerGrid;
-        }
-
-        if (rows.length <= 0) {
+        if (filesByFolder.size === 0) {
             await interaction.reply({ content: "Your soundboard is empty! Get it started with /addsound.", ephemeral: true });
-        } else {
-            await interaction.reply({ content: grids.length > 1 ? `1/${grids.length}` : "", components: grids[0], ephemeral: true });
-            if (grids.length > 1) {
-                for (let grid of grids.slice(1)) {
-                    await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length}`, components: grid, ephemeral: true });
+            return;
+        }
+
+        // Function to create grids of buttons for a set of files
+        const createGrids = (files, folderPath) => {
+            let buttons = files.map(file => {
+                return new ButtonBuilder()
+                    .setCustomId(`sounds-${path.join(soundsDirectory, folderPath, file)}`)
+                    .setLabel(path.parse(file).name)
+                    .setStyle(1);
+            });
+
+            let grids = [];
+            for (let i = 0; i < buttons.length; i += maxButtonsPerGrid) {
+                let gridButtons = buttons.slice(i, i + maxButtonsPerGrid);
+                let rows = [];
+                
+                for (let j = 0; j < gridButtons.length; j += buttonsPerRow) {
+                    rows.push(
+                        new ActionRowBuilder()
+                            .addComponents(gridButtons.slice(j, j + buttonsPerRow))
+                    );
+                }
+                
+                grids.push(rows);
+            }
+            
+            return grids;
+        };
+
+        // Send all grids as separate messages
+        let messageCount = 0;
+        let totalMessages = Array.from(filesByFolder.entries())
+            .reduce((acc, [_, files]) => acc + Math.ceil(files.length / maxButtonsPerGrid), 0);
+
+        // Produce messages
+        for (let [folderName, files] of filesByFolder) {  
+            const folderGrids = createGrids(files, folderName);
+            for (let i = 0; i < folderGrids.length; i++) {
+                messageCount++;
+                const content = `[${messageCount}/${totalMessages}] ${folderName}`;
+                if (messageCount === 1) {
+                    await interaction.reply({ content, components: folderGrids[i], ephemeral: true });
+                } else {
+                    await interaction.followUp({ content, components: folderGrids[i], ephemeral: true });
                 }
             }
         }
@@ -170,7 +191,7 @@ module.exports = {
                 interaction.deleteReply()
             });
         } else {
-            await interaction.reply({ content: "Sorry, I am unable to play that sound.", ephemeral: true});
+            await interaction.reply({ content: "Sorry, I am unable to play that sound.", ephemeral: true });
             console.error("Attempted to play nonexistent file:", filepath);
             return;
         }
