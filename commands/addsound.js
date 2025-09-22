@@ -20,11 +20,26 @@ module.exports = {
                 .setDescription("The name of the sound")
                 .setRequired(true)
                 .setMaxLength(50)
+        )
+        .addStringOption(option => 
+            option.setName("folder")
+                .setDescription("Optional folder to store the sound in (alphanumeric only)")
+                .setRequired(false)
+                .setMaxLength(20)
         ),
     async execute(interaction) {
         const file = interaction.options.getAttachment("mp3_file");
         const name = interaction.options.getString("name");
+        const folder = interaction.options.getString("folder");
         await interaction.deferReply({ephemeral: true});
+
+        // Validate folder name if provided
+        if (folder) {
+            if (!/^[a-zA-Z0-9]+$/.test(folder)) {
+                await interaction.editReply({content: "Folder name must contain only letters and numbers.", ephemeral: true});
+                return;
+            }
+        }
 
         //Make sure the file is not too large
         if(file.size > maxFileSize){
@@ -39,15 +54,20 @@ module.exports = {
             return;
         }
 
+        // Set up the directory path
+        let dirPath = path.join(mp3Dir, interaction.guild.id);
+        if (folder) {
+            dirPath = path.join(dirPath, folder);
+        }
+
         //Make sure the name is not taken
-        let filepath = path.join(mp3Dir, interaction.guild.id, name + ".mp3");
+        let filepath = path.join(dirPath, name + ".mp3");
         if(fs.existsSync(filepath)){
-            await interaction.editReply({content: `This name (\`${name}\`) is already taken. Please choose another name.`, ephemeral: true});
+            await interaction.editReply({content: `This name (\`${name}\`) is already taken in ${folder ? `folder \`${folder}\`` : 'the root folder'}. Please choose another name.`, ephemeral: true});
             return;
         }
 
-        //Make sure the directory does exist
-        let dirPath = path.join(mp3Dir, interaction.guild.id);
+        //Make sure the directory exists
         if(!fs.existsSync(dirPath)){
             try {
                 fs.mkdirSync(dirPath, {recursive: true});
