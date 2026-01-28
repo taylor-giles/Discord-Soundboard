@@ -9,10 +9,10 @@ module.exports = {
     async execute(interaction) {
         let connection = getVoiceConnection(interaction.guild.id);
         if(!connection){
-            await interaction.reply({content: "There are no sounds to stop!", ephemeral: true});
+            await interaction.reply({content: "The soundboard is not currently active. There is nothing to stop!", ephemeral: true});
         } else {
             connection.disconnect();
-            await interaction.reply("🤫 All sounds stopped.");
+            await interaction.reply("🤫 Soundboard session ended.");
         }
     }
 }
