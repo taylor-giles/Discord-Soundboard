@@ -41,6 +41,6 @@ module.exports = {
         await interaction.editReply({content: `Group \`${groupName}\` successfully created!`});
         
         //Send a message (not ephemeral) to notify the server that a group has been added
-        await interaction.channel?.send(`📁 A new group has been created: \`${groupName}\``);
+        await interaction.followUp(`📁 A new group has been created: \`${groupName}\``);
     }
 }

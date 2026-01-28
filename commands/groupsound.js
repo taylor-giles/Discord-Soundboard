@@ -118,6 +118,6 @@ module.exports = {
         await interaction.editReply({content: `\`${soundName}\` successfully added to group \`${groupName}\`!`});
         
         // Send a message (not ephemeral) to notify the server
-        await interaction.channel?.send(`🔗 Sound \`${soundName}\` has been added to group \`${groupName}\``);
+        await interaction.followUp(`🔗 Sound \`${soundName}\` has been added to group \`${groupName}\``);
     }
 };

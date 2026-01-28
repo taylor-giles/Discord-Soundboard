@@ -39,7 +39,7 @@ module.exports = {
         await interaction.editReply({content: `${name} successfully removed. Call /sounds again to see the updated soundboard!`, ephemeral: true});
 
         //Send a message (not ephemeral) to notify the server that a sound has been removed
-        await interaction.channel?.send(`🔇 A sound has been removed from the soundboard: ${name}`);
+        await interaction.followUp(`🔇 A sound has been removed from the soundboard: ${name}`);
     }
 }
 
