@@ -10,63 +10,83 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('sounds')
         .setDescription('Shows the soundboard')
-        .addStringOption(option =>
-            option.setName("folder")
-                .setDescription("Folder to show sounds from (shows all sounds if not specified)")
+        .addStringOption(option => 
+            option.setName("group")
+                .setDescription("Optional group to filter sounds from (shows all sounds if not specified)")
                 .setRequired(false)
-                .setMaxLength(20)
+                .setAutocomplete(true)
         ),
-    async execute(interaction) {
-        const folder = interaction.options.getString("folder");
-        let soundsDirectory = path.join(rootDirectory, interaction.guild.id);
-
-        // Validate folder if provided
-        if (folder) {
-            if (!/^[a-zA-Z0-9]+$/.test(folder)) {
-                await interaction.reply({ content: "Folder name must contain only letters and numbers.", ephemeral: true });
+    async autocomplete(interaction) {
+        try {
+            const soundsDirectory = path.join(rootDirectory, interaction.guild.id);
+            
+            if (!fs.existsSync(soundsDirectory)) {
+                await interaction.respond([]);
                 return;
             }
-            if (!fs.existsSync(path.join(soundsDirectory, folder))) {
-                await interaction.reply({ content: `Folder \`${folder}\` does not exist.`, ephemeral: true });
+
+            // Get all groups (subdirectories)
+            const groups = fs.readdirSync(soundsDirectory, { withFileTypes: true })
+                .filter(dirent => dirent.isDirectory())
+                .map(dirent => dirent.name);
+
+            const focusedValue = interaction.options.getFocused(true).value.toLowerCase();
+            const filtered = groups
+                .filter(group => group.toLowerCase().includes(focusedValue))
+                .slice(0, 25);
+
+            await interaction.respond(
+                filtered.map(group => ({ name: group, value: group }))
+            );
+        } catch (error) {
+            console.error("Autocomplete error:", error);
+            await interaction.respond([]);
+        }
+    },
+
+    async execute(interaction) {
+        const group = interaction.options.getString("group");
+        let soundsDirectory = path.join(rootDirectory, interaction.guild.id);
+        let files = [];
+
+        // Create directory if it doesn't exist
+        if (!fs.existsSync(soundsDirectory)) {
+            try {
+                fs.mkdirSync(soundsDirectory, { recursive: true });
+            } catch (error) {
+                console.error("Error creating directory:", error);
+                await interaction.reply({ content: "Failed to create soundboard directory for your server.", ephemeral: true });
                 return;
             }
         }
 
-        // Get all MP3 files (including those in subfolders if no specific folder is selected)
-        let filesByFolder = new Map(); // Map<string, string[]> where key is folder path (or '' for root) and value is array of filenames
-        
-        if (!folder) {
-            // First get files in root
-            try {
-                const rootFiles = fs.readdirSync(soundsDirectory)
-                    .filter(file => file.endsWith('.mp3'));
-                if (rootFiles.length > 0) {
-                    filesByFolder.set('', rootFiles);
-                }
+        // If a group is specified, read sounds from that group
+        if (group) {
+            const groupPath = path.join(soundsDirectory, group);
+            if (!fs.existsSync(groupPath)) {
+                await interaction.reply({ content: `Group \`${group}\` does not exist.`, ephemeral: true });
+                return;
+            }
 
-                // Then get files in each subfolder
-                fs.readdirSync(soundsDirectory, { withFileTypes: true })
-                    .filter(dirent => dirent.isDirectory())
-                    .forEach(dir => {
-                        const folderPath = dir.name;
-                        const folderFiles = fs.readdirSync(path.join(soundsDirectory, folderPath))
-                            .filter(file => file.endsWith('.mp3'));
-                        if (folderFiles.length > 0) {
-                            filesByFolder.set(folderPath, folderFiles);
-                        }
+            try {
+                files = fs.readdirSync(groupPath)
+                    .filter(file => {
+                        const fullPath = path.join(groupPath, file);
+                        return fs.statSync(fullPath).isFile() && file.endsWith('.mp3');
                     });
             } catch (error) {
-                console.error("Error reading files:", error);
-                await interaction.reply({ content: "Unable to read sound files", ephemeral: true });
+                console.error("Error reading group sounds:", error);
+                await interaction.reply({ content: "Unable to find sound files in this group", ephemeral: true });
                 return;
             }
         } else {
-            // Read files only from the specified folder
+            // Read files only from the root level (not subdirectories)
             try {
-                const files = fs.readdirSync(path.join(soundsDirectory, folder)).filter(file => file.endsWith(".mp3"));
-                if (files.length > 0) {
-                    filesByFolder.set(folder, files);
-                }
+                files = fs.readdirSync(soundsDirectory)
+                    .filter(file => {
+                        const fullPath = path.join(soundsDirectory, file);
+                        return fs.statSync(fullPath).isFile() && file.endsWith('.mp3');
+                    });
             } catch (error) {
                 console.error("Error reading files:", error);
                 await interaction.reply({ content: "Unable to find sound files", ephemeral: true });
@@ -78,20 +98,14 @@ module.exports = {
         let userVoiceChannel = interaction.member.voice.channel;
         if (!userVoiceChannel) {
             //If not in voice channel, send back list of sounds
-            if (filesByFolder.size === 0) {
+            if (files.length === 0) {
                 await interaction.reply({ content: "Your soundboard is empty! Get it started with /addsound.", ephemeral: true });
                 return;
             }
 
             let listOfSounds = "";
-            let index = 1;
-
-            // Then add files from each folder
-            for (let [folderName, files] of filesByFolder) {
-                if(folderName) listOfSounds += `\n\n${folderName}:`;
-                for (let file of files) {
-                    listOfSounds += `\n${index++}) ${path.parse(file).name}`;
-                }
+            for (let i = 0; i < files.length; i++) {
+                listOfSounds += `\n${i + 1}) ${path.parse(files[i]).name}`;
             }
 
             //Create embed
@@ -124,54 +138,48 @@ module.exports = {
         const rowsPerGrid = 5;
         const maxButtonsPerGrid = buttonsPerRow * rowsPerGrid;
 
-        if (filesByFolder.size === 0) {
+        if (files.length === 0) {
             await interaction.reply({ content: "Your soundboard is empty! Get it started with /addsound.", ephemeral: true });
             return;
         }
 
-        // Function to create grids of buttons for a set of files
-        const createGrids = (files, folderPath) => {
-            let buttons = files.map(file => {
-                return new ButtonBuilder()
-                    .setCustomId(`sounds-${path.join(soundsDirectory, folderPath, file)}`)
-                    .setLabel(path.parse(file).name)
-                    .setStyle(1);
-            });
-
-            let grids = [];
-            for (let i = 0; i < buttons.length; i += maxButtonsPerGrid) {
-                let gridButtons = buttons.slice(i, i + maxButtonsPerGrid);
-                let rows = [];
-                
-                for (let j = 0; j < gridButtons.length; j += buttonsPerRow) {
-                    rows.push(
-                        new ActionRowBuilder()
-                            .addComponents(gridButtons.slice(j, j + buttonsPerRow))
-                    );
-                }
-                
-                grids.push(rows);
+        //Build buttons
+        let buttons = files.map(file => {
+            let filepath;
+            if (group) {
+                // If viewing a specific group, sounds are symlinks in the group folder
+                filepath = path.join(soundsDirectory, group, file);
+            } else {
+                // If viewing all sounds, they're at the root level
+                filepath = path.join(soundsDirectory, file);
             }
             
-            return grids;
-        };
+            return new ButtonBuilder()
+                .setCustomId(`sounds-${filepath}`)
+                .setLabel(path.parse(file).name)
+                .setStyle(1);
+        });
 
-        // Send all grids as separate messages
-        let messageCount = 0;
-        let totalMessages = Array.from(filesByFolder.entries())
-            .reduce((acc, [_, files]) => acc + Math.ceil(files.length / maxButtonsPerGrid), 0);
+        //Build rows
+        let rows = [];
+        let buttonIndex = 0;
+        while (buttonIndex < buttons.length) {
+            rows.push(new ActionRowBuilder().addComponents(buttons.slice(buttonIndex, buttonIndex + buttonsPerRow)));
+            buttonIndex += buttonsPerRow;
+        }
 
-        // Produce messages
-        for (let [folderName, files] of filesByFolder) {  
-            const folderGrids = createGrids(files, folderName);
-            for (let i = 0; i < folderGrids.length; i++) {
-                messageCount++;
-                const content = `[${messageCount}/${totalMessages}] ${folderName}`;
-                if (messageCount === 1) {
-                    await interaction.reply({ content, components: folderGrids[i], ephemeral: true });
-                } else {
-                    await interaction.followUp({ content, components: folderGrids[i], ephemeral: true });
-                }
+        //Build grids
+        let grids = [];
+        let rowIndex = 0;
+        while (rowIndex < rows.length) {
+            grids.push(rows.slice(rowIndex, rowIndex + rowsPerGrid));
+            rowIndex += rowsPerGrid;
+        }
+
+        await interaction.reply({ content: grids.length > 1 ? `1/${grids.length}` : "", components: grids[0], ephemeral: true });
+        if (grids.length > 1) {
+            for (let grid of grids.slice(1)) {
+                await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length}`, components: grid, ephemeral: true });
             }
         }
     },

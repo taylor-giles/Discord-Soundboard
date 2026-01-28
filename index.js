@@ -2,6 +2,7 @@ const { Client, Collection, Events, IntentsBitField, MessageActionRow, MessageBu
 const fs = require('fs');
 const path = require('path');
 const sounds = require('./commands/sounds');
+const groups = require('./commands/groups');
 require('dotenv').config();
 
 const token = process.env.TOKEN;
@@ -66,10 +67,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 await interaction.reply({ content: 'Sorry, there was an error processing this command :(', ephemeral: true });
             }
         }
+    } else if (interaction.isAutocomplete()) {
+        //Handle autocomplete interactions
+        const command = interaction.client.commands.get(interaction.commandName);
+        if (!command) {
+            console.error("Received autocomplete for invalid command:", interaction.commandName);
+            return;
+        }
+        try {
+            if (command.autocomplete) {
+                await command.autocomplete(interaction);
+            }
+        } catch (err) {
+            console.error("Error processing autocomplete:", err);
+        }
     } else if(interaction.isButton()){
         //Allow the appropriate command to handle the button click
         if(interaction.customId.startsWith("sounds")){
             sounds.handleButtonClick(interaction);
+        } else if(interaction.customId.startsWith("group-")){
+            groups.handleGroupButtonClick(interaction);
         }
     }
 })
