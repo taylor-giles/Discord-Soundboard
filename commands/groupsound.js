@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { validateGroupPath } = require('../utils/validatePath');
 require('dotenv').config();
 
 const mp3Dir = process.env.MP3_DIRECTORY;
@@ -83,8 +84,6 @@ module.exports = {
 
         let soundsDirectory = path.join(mp3Dir, interaction.guild.id);
         let soundPath = path.join(soundsDirectory, soundName + ".mp3");
-        let groupPath = path.join(soundsDirectory, groupName);
-        let symlinkPath = path.join(groupPath, soundName + ".mp3");
 
         // Verify the sound exists
         if (!fs.existsSync(soundPath)) {
@@ -92,11 +91,22 @@ module.exports = {
             return;
         }
 
+        // Validate the group path
+        const validation = validateGroupPath(groupName, soundsDirectory);
+        if (!validation.valid) {
+            await interaction.editReply({content: validation.error, ephemeral: true});
+            return;
+        }
+
+        let groupPath = validation.path;
+
         // Verify the group exists
         if (!fs.existsSync(groupPath)) {
             await interaction.editReply({content: `Group \`${groupName}\` does not exist.`, ephemeral: true});
             return;
         }
+
+        let symlinkPath = path.join(groupPath, soundName + ".mp3");
 
         // Check if symlink already exists
         if (fs.existsSync(symlinkPath)) {

@@ -1,6 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const { validateGroupPath } = require('../utils/validatePath');
 require('dotenv').config();
 
 const mp3Dir = process.env.MP3_DIRECTORY;
@@ -19,8 +20,16 @@ module.exports = {
         const groupName = interaction.options.getString("name");
         await interaction.deferReply({ephemeral: true});
 
-        // All groups are stored as subdirectories
-        let groupPath = path.join(mp3Dir, interaction.guild.id, groupName);
+        let soundsDirectory = path.join(mp3Dir, interaction.guild.id);
+
+        // Validate the group path
+        const validation = validateGroupPath(groupName, soundsDirectory);
+        if (!validation.valid) {
+            await interaction.editReply({content: validation.error, ephemeral: true});
+            return;
+        }
+
+        let groupPath = validation.path;
 
         // Check if group already exists
         if (fs.existsSync(groupPath)) {
