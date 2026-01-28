@@ -145,17 +145,17 @@ module.exports = {
 
         //Build buttons
         let buttons = files.map(file => {
-            let filepath;
+            let relativePath;
             if (group) {
-                // If viewing a specific group, sounds are symlinks in the group folder
-                filepath = path.join(soundsDirectory, group, file);
+                // If viewing a specific group, use relative path: group/sound.mp3
+                relativePath = `${group}/${file}`;
             } else {
-                // If viewing all sounds, they're at the root level
-                filepath = path.join(soundsDirectory, file);
+                // If viewing all sounds, use just the filename
+                relativePath = file;
             }
             
             return new ButtonBuilder()
-                .setCustomId(`sounds-${filepath}`)
+                .setCustomId(`sounds-${relativePath}`)
                 .setLabel(path.parse(file).name)
                 .setStyle(1);
         });
@@ -176,16 +176,22 @@ module.exports = {
             rowIndex += rowsPerGrid;
         }
 
-        await interaction.reply({ content: grids.length > 1 ? `1/${grids.length}` : "", components: grids[0], ephemeral: true });
+        await interaction.reply({ content: grids.length > 1 ? `1/${grids.length}${group ? ` [${group}]` : ""}` : `${group ? `[${group}]` : ""}`, components: grids[0], ephemeral: true });
         if (grids.length > 1) {
             for (let grid of grids.slice(1)) {
-                await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length}`, components: grid, ephemeral: true });
+                await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length}${group ? ` [${group}]` : ""}`, components: grid, ephemeral: true });
             }
         }
     },
 
     async handleButtonClick(interaction) {
-        let filepath = interaction.customId.split("-")?.slice(1)?.join("-");
+        // Extract relative path from custom ID (format: "sounds-filename.mp3" or "sounds-group/filename.mp3")
+        let relativePath = interaction.customId.split("-")?.slice(1)?.join("-");
+        
+        // Reconstruct the full filepath
+        const rootDirectory = process.env.MP3_DIRECTORY;
+        let filepath = path.join(rootDirectory, interaction.guild.id, relativePath);
+        
         if (filepath && fs.existsSync(filepath)) {
             const resource = createAudioResource(filepath);
             const player = createAudioPlayer();
