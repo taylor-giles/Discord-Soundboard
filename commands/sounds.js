@@ -3,6 +3,7 @@ const { createAudioPlayer, createAudioResource, joinVoiceChannel, getVoiceConnec
 const fs = require('fs');
 const path = require('path');
 const { VoiceConnectionStatus } = require('@discordjs/voice');
+const { displaySounds } = require('../utils/displaySounds');
 require('dotenv').config();
 
 const rootDirectory = process.env.MP3_DIRECTORY;
@@ -143,45 +144,7 @@ module.exports = {
             return;
         }
 
-        //Build buttons
-        let buttons = files.map(file => {
-            let relativePath;
-            if (group) {
-                // If viewing a specific group, use relative path: group/sound.mp3
-                relativePath = `${group}/${file}`;
-            } else {
-                // If viewing all sounds, use just the filename
-                relativePath = file;
-            }
-            
-            return new ButtonBuilder()
-                .setCustomId(`sounds-${relativePath}`)
-                .setLabel(path.parse(file).name)
-                .setStyle(1);
-        });
-
-        //Build rows
-        let rows = [];
-        let buttonIndex = 0;
-        while (buttonIndex < buttons.length) {
-            rows.push(new ActionRowBuilder().addComponents(buttons.slice(buttonIndex, buttonIndex + buttonsPerRow)));
-            buttonIndex += buttonsPerRow;
-        }
-
-        //Build grids
-        let grids = [];
-        let rowIndex = 0;
-        while (rowIndex < rows.length) {
-            grids.push(rows.slice(rowIndex, rowIndex + rowsPerGrid));
-            rowIndex += rowsPerGrid;
-        }
-
-        await interaction.reply({ content: grids.length > 1 ? `1/${grids.length}${group ? ` [${group}]` : ""}` : `${group ? `[${group}]` : ""}`, components: grids[0], ephemeral: true });
-        if (grids.length > 1) {
-            for (let grid of grids.slice(1)) {
-                await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length}${group ? ` [${group}]` : ""}`, components: grid, ephemeral: true });
-            }
-        }
+        await displaySounds(interaction, files, group);
     },
 
     async handleButtonClick(interaction) {

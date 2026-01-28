@@ -3,6 +3,7 @@ const { joinVoiceChannel } = require('@discordjs/voice');
 const fs = require('fs');
 const path = require('path');
 const { VoiceConnectionStatus } = require('@discordjs/voice');
+const { displaySounds } = require('../utils/displaySounds');
 require('dotenv').config();
 
 const rootDirectory = process.env.MP3_DIRECTORY;
@@ -140,38 +141,7 @@ module.exports = {
             return;
         }
 
-        // Build buttons for sounds
-        const buttonsPerRow = 5;
-        const rowsPerGrid = 5;
-
-        let buttons = sounds.map(sound => {
-            return new ButtonBuilder()
-                .setCustomId(`sounds-${path.join(groupPath, sound)}`)
-                .setLabel(path.parse(sound).name)
-                .setStyle(1);
-        });
-
-        // Build rows
-        let rows = [];
-        let buttonIndex = 0;
-        while (buttonIndex < buttons.length) {
-            rows.push(new ActionRowBuilder().addComponents(buttons.slice(buttonIndex, buttonIndex + buttonsPerRow)));
-            buttonIndex += buttonsPerRow;
-        }
-
-        // Build grids
-        let grids = [];
-        let rowIndex = 0;
-        while (rowIndex < rows.length) {
-            grids.push(rows.slice(rowIndex, rowIndex + rowsPerGrid));
-            rowIndex += rowsPerGrid;
-        }
-
-        await interaction.reply({ content: grids.length > 1 ? `1/${grids.length} [${groupName}]` : `[${groupName}]`, components: grids[0], ephemeral: true });
-        if (grids.length > 1) {
-            for (let grid of grids.slice(1)) {
-                await interaction.followUp({ content: `${grids.indexOf(grid) + 1}/${grids.length} [${groupName}]`, components: grid, ephemeral: true });
-            }
-        }
+        // Use the centralized displaySounds function
+        await displaySounds(interaction, sounds, groupName);
     }
 };
